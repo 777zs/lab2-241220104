@@ -1,0 +1,47 @@
+@startuml UML活动图
+' 活动图（行为性）：报名提交到名额处理与候补登记的主流程
+' 递补时限与顺延见 UML时序图，状态转换全图见 UML状态图
+' 覆盖需求：REQ-007、019、020、021、023、027、033 的分支与校验顺序
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam ActivityBorderColor #2D3748
+skinparam ArrowColor #4A5568
+skinparam ActivityFontSize 12
+
+|#E8F0FE|参与者|
+start
+:组合条件查询活动（REQ-006）;
+:选择场次与票种，打开报名表单;
+:系统下发请求标识与版本号（REQ-020/023）;
+:填写姓名、手机号与票种要求信息，提交;
+|#EAF7EF|报名处理模块|
+if (三重校验：格式、请求标识、版本与状态?) then (任一不通过)
+  :按原因拒绝并给出下一步（REQ-023/033）;
+  stop
+else (通过)
+endif
+:开启事务，对该票种行加锁（REQ-019）;
+|#FFF3E0|名额与候补模块|
+if (剩余名额 ≥ 本单张数?) then (不够)
+  :名额与记录同时回滚（REQ-032）;
+  if (参与者选择加入候补?) then (是)
+    :按受理时间入队，返回位次（REQ-009）;
+    :写日志并校验守恒式（REQ-015/027）;
+  else (否)
+    :提示“名额已满，可加入候补”;
+    stop
+  endif
+else (够)
+  :原子扣减名额并生成报名记录;
+  if (免费票种?) then (是)
+    :状态 = 已确认;
+  else (收费)
+    :状态 = 待支付，线下收款后标记（REQ-031）;
+  endif
+  :写日志并校验守恒式（REQ-015/027）;
+endif
+|#E8F0FE|参与者|
+:在“我的报名”查看记录或位次；若为候补记录，\n后续递补与 30 分钟确认见时序图（REQ-021）;
+stop
+@enduml

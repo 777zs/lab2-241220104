@@ -1,0 +1,94 @@
+@startuml UML用例图
+' 用例图：四类用户与定时任务，覆盖实验一任务书要求的六个基本模块
+' 覆盖需求：REQ-001 至 013、021、022、025 至 027、030、031（按角色归类）
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam ArrowColor #4A5568
+skinparam usecase {
+  BackgroundColor #F7FAFC
+  BorderColor #2D3748
+  FontSize 12
+}
+left to right direction
+
+actor "参与者" as P
+actor "组织者" as O
+actor "检票人员" as K
+actor "管理员" as A
+actor "定时任务\n（截止/递补/缺席）" as T
+
+rectangle "活动票务与报名系统" {
+  usecase "UC01 注册与登录" as UC01
+  usecase "UC02 组合条件查询活动" as UC02
+  usecase "UC03 提交报名" as UC03
+  usecase "UC04 取消报名" as UC04
+  usecase "UC05 登记候补并查看位次" as UC05
+  usecase "UC06 确认递补（30 分钟内）" as UC06
+  usecase "UC07 查看站内通知" as UC07
+  usecase "UC08 创建活动与场次票种" as UC08
+  usecase "UC09 提交活动审核" as UC09
+  usecase "UC10 审核并发布活动" as UC10
+  usecase "UC11 调整名额与停售" as UC11
+  usecase "UC12 标记线下收款与退款" as UC12
+  usecase "UC13 取消活动并批量终止记录" as UC13
+  usecase "UC14 授权与撤销检票人员" as UC14
+  usecase "UC15 现场核验并确认入场" as UC15
+  usecase "UC16 申请撤销签到" as UC16
+  usecase "UC17 审批撤销签到" as UC17
+  usecase "UC18 审批延长报名申请" as UC18
+  usecase "UC19 导出名单与查看容量统计" as UC19
+  usecase "UC20 查询关键操作日志" as UC20
+  usecase "UC21 标记缺席并关闭名单" as UC21
+  usecase "«include» 校验角色与归属权限" as X1
+  usecase "«include» 按服务器时间判定" as X2
+  usecase "«include» 记录关键操作日志" as X3
+  usecase "«extend» 名额已满转候补提示" as E1
+  usecase "«extend» 重复提交返回原结果" as E2
+}
+
+P --> UC01
+P --> UC02
+P --> UC03
+P --> UC04
+P --> UC05
+P --> UC06
+P --> UC07
+O --> UC01
+O --> UC08
+O --> UC09
+O --> UC11
+O --> UC12
+O --> UC13
+O --> UC14
+O --> UC18
+O --> UC19
+K --> UC01
+K --> UC15
+K --> UC16
+A --> UC01
+A --> UC10
+A --> UC17
+A --> UC20
+A --> UC21
+T --> UC06
+T --> UC21
+
+UC03 ..> E1 : extend
+UC03 ..> E2 : extend
+UC03 ..> X1 : include
+UC04 ..> X1 : include
+UC05 ..> X2 : include
+UC06 ..> X2 : include
+UC11 ..> X3 : include
+UC15 ..> X1 : include
+UC15 ..> X3 : include
+UC17 ..> X3 : include
+UC19 ..> X1 : include
+UC19 ..> X3 : include
+UC20 ..> X3 : include
+UC21 ..> X2 : include
+UC08 ..> UC09 : 后续
+UC09 ..> UC10 : 后续
+UC16 ..> UC17 : 后续
+@enduml

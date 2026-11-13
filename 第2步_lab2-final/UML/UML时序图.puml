@@ -1,0 +1,71 @@
+@startuml UML时序图
+' 时序图（交互性）：并发抢最后一个名额、幂等重复提交、取消释放与 30 分钟递补
+' 覆盖需求：REQ-007、019、020、021、023、027、032
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 230
+skinparam ParticipantPadding 6
+skinparam BoxPadding 4
+
+actor "参与者甲" as A
+actor "参与者乙" as B
+participant "报名处理\nEnrollmentService" as ES
+participant "名额与候补\nCapacityService" as CS
+database "ticket_type 行\nFOR UPDATE" as DB
+collections "候补队列\nWaitlistQueue" as WQ
+
+== ① 同时抢最后一个名额（REQ-019、023） ==
+A -> ES : 提交报名 T1，标识 tk-01，版本 v7
+activate ES
+ES -> CS : deduct(T1)
+activate CS
+CS -> DB : 申请行锁
+DB --> CS : 已持有
+CS -> DB : remaining 1→0，同事务插入记录
+DB --> CS : 提交成功
+CS --> ES : 报名号 E-1001
+deactivate CS
+ES --> A : 待支付，E-1001
+deactivate ES
+
+B -> ES : 提交报名 T1，标识 tk-02，版本 v7
+activate ES
+ES -> CS : deduct(T1)
+activate CS
+CS -> DB : 申请行锁（甲未提交时在此等待）
+DB --> CS : 锁释放，读到 remaining = 0
+CS --> ES : 名额不足，未截止且未停售
+deactivate CS
+ES --> B : 拒绝并给候补入口（REQ-033）
+deactivate ES
+
+== ② 甲用同一标识重试（REQ-020） ==
+A -> ES : 再次提交 tk-01
+activate ES
+ES -> ES : request_token 唯一约束命中
+ES --> A : 返回第一次的 E-1001，不新建记录
+deactivate ES
+
+== ③ 甲取消，名额释放并递补（REQ-008、021、027） ==
+A -> ES : 取消 E-1001
+activate ES
+ES -> CS : release(T1)
+activate CS
+CS -> DB : 同一事务内 remaining 0→1
+CS -> WQ : head(T1) 取首位并锁定名额
+WQ --> CS : 首位为乙的候补记录
+CS -> DB : 守恒校验：总名额＝剩余＋已确认\n＋待支付＋递补待确认
+CS --> ES : 已锁定待确认
+deactivate CS
+ES -> ES : 候补中 → 递补待确认，发通知记时
+ES --> A : 取消完成，登记应退名单
+deactivate ES
+
+note over ES, WQ
+  30 分钟时限由后台任务按服务器时间回查（REQ-010、021）：逾期则名额顺延下一位，
+  同一人连续两次逾期本轮不再递补。日志写入与业务写入同事务，日志失败则名额与状态
+  一起回滚、请求标识保持可用，用户可直接重试（REQ-015、020、032）。
+end note
+@enduml

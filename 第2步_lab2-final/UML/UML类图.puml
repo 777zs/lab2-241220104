@@ -1,0 +1,111 @@
+@startuml UML类图
+' 类图（必画图）：领域实体与领域规则；属性与关系回指实验一 REQ 编号
+' 覆盖需求：REQ-003、005、007、009、020、022、023、024、027、031（枚举取值见报告表 5）
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam ArrowColor #4A5568
+skinparam nodesep 24
+skinparam ranksep 32
+
+package "身份" {
+  abstract class Account {
+    - accountId : long
+    - phone : String
+    - passwordHash : String
+    - lockedUntil : Instant
+    + verifyPassword() : boolean
+  }
+  class Participant
+  class Organizer {
+    - qualification : 资质状态
+  }
+  class TicketChecker
+  class Admin
+}
+
+package "活动结构" {
+  class Activity {
+    - activityId : long
+    - title : String
+    - campus : String
+    - enrollEndTime : Instant
+    - status : ActivityStatus
+    - version : int
+    + submitReview() : void
+  }
+  class ActivitySession {
+    - seqNo : int
+    - beginTime : Instant
+  }
+  class TicketType {
+    - totalCount : int
+    - remainingCount : int
+    - price : BigDecimal
+    - perUserLimit : int
+    - stopped : boolean
+    + isSoldOut() : boolean
+  }
+}
+
+package "报名与名额" {
+  class Enrollment {
+    - enrollNo : String
+    - status : EnrollmentStatus
+    - paidAmount : BigDecimal
+    - requestToken : String
+    - pageVersion : int
+    - checkinTime : Instant
+    + requestCancel() : void
+  }
+  class WaitlistQueue {
+    - closed : boolean
+    + enqueue(e) : int
+    + head() : Enrollment
+  }
+  class CapacityRule {
+    + invariantHolds(t) : boolean
+    + checkLowerBound(t, n) : boolean
+  }
+}
+
+package "审计与快照（外围记录）" {
+  class AuditLog {
+    - operatorId : long
+    - objectId : String
+    - result : String
+  }
+  class ExportSnapshot {
+    - dataTimePoint : Instant
+  }
+}
+
+Account <|-- Participant
+Account <|-- Organizer
+Account <|-- TicketChecker
+Account <|-- Admin
+Organizer "1" --> "0..*" Activity : 创建管理
+note top of Activity
+  枚举取值见报告表格与状态图：
+  ActivityStatus 七值、EnrollmentStatus 九值
+end note
+Activity "1" *-- "1..*" ActivitySession
+ActivitySession "1" *-- "1..*" TicketType
+TicketType "1" --> "0..*" Enrollment : 产生
+TicketType "1" -- "1" WaitlistQueue : 队列
+TicketType "1" -- "1" CapacityRule : 校验
+Participant "1" --> "0..*" Enrollment : 本人报名
+Activity "1" -- "0..*" AuditLog : 操作留痕
+Activity "1" -- "0..*" ExportSnapshot : 时点快照
+note top of CapacityRule
+  REQ-027 守恒：总名额 = 剩余 + 已确认
+  + 待支付 + 递补待确认
+end note
+note bottom of Enrollment
+  REQ-020 幂等标识一次一用
+  REQ-023 提交校验版本号
+end note
+@enduml

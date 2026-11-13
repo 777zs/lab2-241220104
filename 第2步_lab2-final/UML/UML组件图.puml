@@ -1,0 +1,76 @@
+@startuml UML组件图
+' 组件图：模块之间通过哪些接口交互，以及依赖方向（对应包图的六个层次）
+' 覆盖需求：REQ-011、013、015、019、021、026 的模块间调用
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam ArrowColor #4A5568
+skinparam componentStyle rectangle
+
+package "界面组件" {
+  [报名页面\n选场次票种·填信息·三步流程] as C_Form
+  [我的报名\n位次·递补倒计时·取消] as C_Mine
+  [检票组件\n编号输入 / 入场码扫描] as C_Check
+  [组织者管理\n草稿·场次票种·名额·停售] as C_Mgr
+  [统计与导出\n同一时点快照] as C_Stat
+}
+
+package "业务组件" {
+  [身份与权限] as M_Auth
+  [活动管理] as M_Act
+  [报名处理] as M_Enroll
+  [名额与候补] as M_Cap
+  [签到核验] as M_Check
+  [导出与统计] as M_Exp
+  [审核工作流] as M_Rev
+  [通知] as M_Notice
+  [日志（只追加）] as M_Log
+}
+
+package "支撑组件" {
+  [事务与行级锁] as M_Tx
+  [持久化仓储] as M_Db
+  [快照文件存储] as M_File
+  [服务器时钟] as M_Clock
+}
+
+actor "参与者" as U1
+actor "组织者" as U2
+actor "检票人员" as U3
+actor "管理员" as U4
+
+U1 --> C_Form
+U1 --> C_Mine
+U3 --> C_Check
+U2 --> C_Mgr
+U2 --> C_Stat
+U4 --> C_Stat
+U4 --> C_Mgr
+
+C_Form --> M_Auth : 表单令牌与角色校验
+C_Form --> M_Enroll : 提交报名命令（含请求标识、版本号）
+C_Mine --> M_Enroll : 取消报名 / 确认递补
+C_Mine --> M_Notice : 读取站内通知
+C_Check --> M_Check : 核验、重复判定、撤销申请
+C_Mgr --> M_Act : 草稿、送审、关键信息变更
+C_Mgr --> M_Cap : 调整名额、停售、延长申请
+C_Stat --> M_Exp : 生成名单快照与统计
+
+M_Enroll --> M_Cap : 同一事务内扣减名额
+M_Enroll --> M_Log : 报名、拒绝、幂等命中
+M_Cap --> M_Tx : 票种行加锁，保证不超卖
+M_Cap --> M_Clock : 截止判定、30 分钟计时
+M_Cap --> M_Notice : 递补通知与截止提醒
+M_Cap --> M_Db : 名额与队列持久化、守恒对账
+M_Check --> M_Auth : 检票授权是否对本活动有效
+M_Check --> M_Log : 核验、撤销、越权尝试
+M_Check --> M_Cap : 撤销签到后状态回退，不改名额
+M_Exp --> M_Db : 按数据时点读取名单
+M_Exp --> M_File : 生成 xlsx，30 分钟下载时效
+M_Exp --> M_Log : 每次导出一条日志
+M_Act --> M_Rev : 活动审核、延长审批、关键信息重审
+M_Rev --> M_Notice : 审核结果与变更生效通知
+M_Rev --> M_Log : 审批结论留痕
+M_Auth --> M_Db : 账号、失败次数、锁定时间
+M_Notice --> M_Db : 站内通知记录
+@enduml

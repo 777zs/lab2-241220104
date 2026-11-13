@@ -1,0 +1,67 @@
+@startuml UML包图
+' 结构性视图：模块划分与依赖方向（自上而下，禁止反向依赖）
+' 覆盖需求：REQ-015、019、028、032、033 在六层中的落点
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam ArrowColor #4A5568
+skinparam nodesep 24
+skinparam ranksep 30
+
+package "① 界面层" as P1 {
+  [参与者端（移动 Web）] as UI_P
+  [组织者工作台] as UI_O
+  [检票端] as UI_C
+  [管理员工作台] as UI_A
+}
+package "② 接口层" as P2 {
+  [鉴权与角色拦截] as API_A
+  [报名接口（令牌/幂等）] as API_E
+  [活动与票种接口（版本号）] as API_V
+  [核验与导出接口] as API_X
+  [统一错误码与提示文案] as API_R
+}
+package "③ 业务服务层" as P3 {
+  [EnrollmentService] as S_E
+  [CapacityService] as S_C
+  [ActivityManageService] as S_A
+  [CheckinService] as S_K
+  [ExportService] as S_X
+  [ReviewService] as S_R
+  [NotificationService] as S_N
+  [AuditLogService] as S_L
+}
+package "④ 领域层" as P4 {
+  [Activity / Session / TicketType] as D_A
+  [Enrollment 与状态机] as D_E
+  [WaitlistQueue] as D_W
+  [CapacityRule 守恒与下限] as D_C
+}
+package "⑤ 基础设施层" as P5 {
+  [持久化仓储] as I_DB
+  [事务与行级锁] as I_TX
+  [文件与快照存储] as I_F
+  [服务器时钟] as I_T
+  [口令哈希与盐值] as I_S
+}
+package "⑥ 公共契约" as P6 {
+  [枚举与常量] as C_1
+  [DTO 与命令对象] as C_2
+  [拒绝原因目录（八类）] as C_3
+}
+
+P1 --> P2 : 只经接口层进入业务
+P2 --> P3
+P3 --> P4 : 规则判定在领域层
+P4 --> P5
+S_E --> S_C : 同一事务扣减名额
+S_C --> I_TX : 行级锁保证不超卖
+S_C --> I_T : 截止与 30 分钟时限
+S_K --> S_L : 核验、撤销、越权留痕
+S_X --> I_F : xlsx 快照与下载时效
+S_R --> S_N : 审批与变更结果通知
+S_L --> I_DB : 日志表只追加
+P3 ..> P6 : 共用枚举与错误码
+P4 ..> P6
+@enduml

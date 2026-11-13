@@ -1,0 +1,110 @@
+@startuml UML服务类图
+' 类图（二）：服务类与接口，说明每个模块由哪个类承担，方法即界面操作的入口
+' 覆盖需求：REQ-003、007、013、021、025、028 对应的服务入口
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 12
+skinparam classAttributeFontSize 11
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #4A5568
+skinparam nodesep 30
+skinparam ranksep 40
+
+interface "IEnrollmentService" as I1 {
+  + openForm(sessionId, ticketTypeId) : FormToken
+  + submit(cmd : EnrollCommand) : EnrollResult
+  + cancel(enrollNo : String) : EnrollResult
+  + joinWaitlist(ticketTypeId : long) : EnrollResult
+  + confirmReplacement(noticeId, accept) : EnrollResult
+}
+interface "ICapacityService" as I2 {
+  + deductInTransaction(t, qty) : boolean
+  + releaseAndPromote(t : TicketType) : void
+  + reconcile(activityId : long) : ConsistencyReport
+}
+interface "ICheckinService" as I3 {
+  + verify(code : String, checker : TicketChecker) : VerifyResult
+  + applyRevoke(enrollNo, reason) : void
+  + executeRevoke(enrollNo, admin : Admin) : void
+}
+interface "IActivityManageService" as I4 {
+  + saveDraft(a : Activity) : void
+  + submitForReview(a : Activity) : void
+  + review(a : Activity, pass, reason) : void
+  + adjustQuota(t, newTotal) : AdjustResult
+  + stopSale(t : TicketType) : void
+  + cancelActivity(a, reason) : void
+}
+interface "IExportService" as I5 {
+  + exportRoster(activityId, filter) : ExportSnapshot
+  + download(snapshotId, requester) : byte[]
+}
+interface "IAuditLogService" as I6 {
+  + append(entry : LogEntry) : void
+  + query(type, operator, activity, period) : Page~LogEntry~
+}
+
+class EnrollmentService {
+  - stateMachine : EnrollmentStateMachine
+  - tokenRepo : RequestTokenRepository
+  + submit(cmd) : EnrollResult
+  + confirmReplacement(noticeId, accept) : EnrollResult
+}
+class CapacityService {
+  - ticketRepo : TicketTypeRepository
+  - waitlistRepo : WaitlistRepository
+  - clock : ServerClock
+  + deductInTransaction(t, qty) : boolean
+  + releaseAndPromote(t) : void
+}
+class WaitlistPromotionJob {
+  - timeoutMinutes : int
+  + onQuotaReleased(ticketTypeId) : void
+  + onDeadlinePassed(activityId) : void
+}
+class CheckinService {
+  - grantRepo : CheckinGrantRepository
+  + verify(code, checker) : VerifyResult
+}
+class ActivityManageService
+class ReviewService {
+  + reviewExtension(req, pass) : void
+  + reviewQualification(org, pass) : void
+  + reviewKeyChange(c, pass) : void
+}
+class ExportService
+class AuditLogService {
+  - writer : AppendOnlyWriter
+}
+class NotificationService {
+  + notifyPromotion(e : Enrollment) : void
+  + notifyChange(a : Activity, c : KeyInfoChange) : void
+  + notifyActivityCanceled(a : Activity) : void
+}
+class ServerClock {
+  + now() : Instant
+}
+
+EnrollmentService ..|> I1
+CapacityService ..|> I2
+CheckinService ..|> I3
+ActivityManageService ..|> I4
+ExportService ..|> I5
+AuditLogService ..|> I6
+EnrollmentService --> CapacityService : 同一事务扣减名额
+EnrollmentService --> AuditLogService : 与业务同事务写日志
+CapacityService --> ServerClock : 截止与 30 分钟判定
+WaitlistPromotionJob --> CapacityService : 释放后触发递补
+WaitlistPromotionJob --> NotificationService : 发递补通知
+CheckinService --> AuditLogService : 核验与撤销留痕
+ActivityManageService --> ReviewService : 送审与审批
+ReviewService --> NotificationService : 审批结果通知
+ExportService --> AuditLogService : 导出留痕
+ActivityManageService --> NotificationService : 截止与变更提醒
+note bottom of WaitlistPromotionJob
+  REQ-021 的 30 分钟确认时限、逾期顺延与
+  “两次逾期不再递补”由本定时任务驱动，
+  不依赖客户端计时。
+end note
+@enduml
